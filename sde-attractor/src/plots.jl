@@ -12,7 +12,7 @@ at their specified centres and radii.
 function plot_phase_portrait(ax, x, y, params; jump_log=nothing)
     n = length(x)
     t_norm = collect(range(0f0, 1f0; length=n))
-    lines!(ax, x, y; color=t_norm, colormap=:viridis, colorrange=(0, 1), linewidth=0.5)
+    lines!(ax, x, y;  linewidth=0.5)
 
     θ = range(0, 2π; length=300)
     cos_θ, sin_θ = cos.(θ), sin.(θ)
