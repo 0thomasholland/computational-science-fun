@@ -1,6 +1,6 @@
 # Seismic Wave Forward Modeller
 
-![Large simulation — 8 km × 8 km, 3 sources](output/20.gif)
+![Large simulation — 8 km × 8 km, 3 sources](output/1.gif)
 
 ![Minimal simulation — 3 km × 3 km, single source](output/10.gif)
 

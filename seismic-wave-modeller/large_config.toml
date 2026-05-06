@@ -1,6 +1,6 @@
 [grid]
-nx = 800
-nz = 800
+nx = 1600
+nz = 1600
 dx = 10.0
 dz = 10.0
 
@@ -15,26 +15,26 @@ cfl_safety = 0.5
 
 [[sources]]
 x         = 200
-z         = 400
+z         = 1000
 amplitude = 25.0
 frequency = 20.0
 
 [[sources]]
-x         = 400
+x         = 500
 z         = 200
-amplitude = 25.0
+amplitude = 5.0
 frequency = 20.0
 
 [[sources]]
-x         = 600
-z         = 600
-amplitude = 25.0
+x         = 1000
+z         = 900
+amplitude = 15.0
 frequency = 20.0
 
 [visualization]
 field        = "vmag"
 video_length = 25.0
 fps          = 30.0
-iteration    = 20
+iteration    = 1
 image_width  = 1200
 image_height = 1000

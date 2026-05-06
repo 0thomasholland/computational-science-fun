@@ -7,7 +7,7 @@ Personal collection of computational physics and mathematics projects. Each is s
 ### [Seismic Wave Modeller](seismic-wave-modeller/README.md) — Rust
 2D elastic wave forward modeller using the Virieux staggered-grid finite-difference scheme. Simulates P- and S-wave propagation through heterogeneous media with configurable material properties. Outputs animated GIFs of the wavefield.
 
-![Seismic wave model](seismic-wave-modeller/output/3.gif)
+![Seismic wave model](seismic-wave-modeller/output/1.gif)
 
 ---
 
