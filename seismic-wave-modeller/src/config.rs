@@ -27,7 +27,7 @@ impl GridConfig {
     }
 }
 
-/// Homogeneous material properties
+/// Homogeneous material properties (background medium, required)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MaterialConfig {
     pub vp: f64,   // P-wave velocity (m/s)
@@ -50,6 +50,49 @@ impl MaterialConfig {
                 "S-wave velocity must be less than P-wave velocity (vs={} > vp={})",
                 self.vs,
                 self.vp
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// A rectangular region of the grid with distinct material properties.
+/// Applied in order after the background [materials], so later regions override earlier ones.
+/// Grid indices are inclusive on both ends.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegionConfig {
+    pub x_start: usize,
+    pub x_end: usize,
+    pub z_start: usize,
+    pub z_end: usize,
+    pub vp: f64,
+    pub vs: f64,
+    pub rho: f64,
+}
+
+impl RegionConfig {
+    fn validate(&self, nx: usize, nz: usize) -> Result<()> {
+        if self.vp <= 0.0 || self.vs <= 0.0 || self.rho <= 0.0 {
+            return Err(anyhow!(
+                "Region material properties must be positive (vp={}, vs={}, rho={})",
+                self.vp, self.vs, self.rho
+            ));
+        }
+        if self.vs > self.vp {
+            return Err(anyhow!(
+                "Region S-wave velocity must be less than P-wave velocity (vs={} > vp={})",
+                self.vs, self.vp
+            ));
+        }
+        if self.x_start > self.x_end || self.z_start > self.z_end {
+            return Err(anyhow!(
+                "Region bounds must satisfy x_start <= x_end and z_start <= z_end"
+            ));
+        }
+        if self.x_end >= nx || self.z_end >= nz {
+            return Err(anyhow!(
+                "Region ({}-{}, {}-{}) extends outside grid ({}x{})",
+                self.x_start, self.x_end, self.z_start, self.z_end, nx, nz
             ));
         }
         Ok(())
@@ -214,6 +257,8 @@ impl VisualizationConfig {
 pub struct Config {
     pub grid: GridConfig,
     pub materials: MaterialConfig,
+    #[serde(default)]
+    pub regions: Vec<RegionConfig>,
     pub simulation: SimulationConfig,
     pub sources: Vec<SourceConfig>,
     pub visualization: VisualizationConfig,
@@ -241,9 +286,17 @@ impl Config {
         self.simulation.validate()?;
         self.visualization.validate()?;
 
+        // Validate regions against grid
+        for region in &self.regions {
+            region.validate(self.grid.nx, self.grid.nz)?;
+        }
+
+        // Compute max vp across background and all regions for CFL
+        let vp_max = self.regions.iter().map(|r| r.vp).fold(self.materials.vp, f64::max);
+
         // Compute dt from CFL if needed
         self.simulation
-            .compute_dt_if_needed(self.grid.dx, self.grid.dz, self.materials.vp);
+            .compute_dt_if_needed(self.grid.dx, self.grid.dz, vp_max);
 
         // Validate sources against grid
         for source in &self.sources {

@@ -49,10 +49,19 @@ fn run_simulation(config: Config, verbose: bool) -> Result<()> {
     // Build grid
     let grid = Grid::new(nx, nz, dx, dz);
 
-    // Build homogeneous material properties
-    let vp = Array2::from_elem((nx, nz), config.materials.vp);
-    let vs = Array2::from_elem((nx, nz), config.materials.vs);
-    let rho = Array2::from_elem((nx, nz), config.materials.rho);
+    // Build material arrays: start with background, then paint regions in order
+    let mut vp = Array2::from_elem((nx, nz), config.materials.vp);
+    let mut vs = Array2::from_elem((nx, nz), config.materials.vs);
+    let mut rho = Array2::from_elem((nx, nz), config.materials.rho);
+    for region in &config.regions {
+        for xi in region.x_start..=region.x_end {
+            for zi in region.z_start..=region.z_end {
+                vp[[xi, zi]] = region.vp;
+                vs[[xi, zi]] = region.vs;
+                rho[[xi, zi]] = region.rho;
+            }
+        }
+    }
     let materials = MaterialProperties::new(vp, vs, rho);
 
     // Build sources from configuration
@@ -77,8 +86,9 @@ fn run_simulation(config: Config, verbose: bool) -> Result<()> {
         cfl_safety: config.simulation.cfl_safety,
     };
 
-    // Verify CFL condition
-    sim_params.check_cfl(dx, dz, config.materials.vp);
+    // Verify CFL condition using max vp across all regions
+    let vp_max = config.regions.iter().map(|r| r.vp).fold(config.materials.vp, f64::max);
+    sim_params.check_cfl(dx, dz, vp_max);
 
     // Print summary
     println!("Running simulation with dt = {} seconds", dt);

@@ -1,0 +1,50 @@
+[grid]
+nx = 1000
+nz = 1000
+dx = 10.0
+dz = 10.0
+
+# Background medium (top half: z = 0–499)
+[materials]
+vp  = 3000.0
+vs  = 1732.0
+rho = 2700.0
+
+# Bottom half: faster medium (z = 500–999)
+[[regions]]
+x_start = 0
+x_end   = 999
+z_start = 500
+z_end   = 999
+vp  = 5000.0
+vs  = 2887.0
+rho = 3000.0
+
+[simulation]
+total_time  = 2.0
+cfl_safety  = 0.5
+report_period = 100
+
+# Source 1: top medium, left side
+[[sources]]
+x         = 125
+z         = 250
+amplitude = 25.0
+frequency = 20.0
+trigger_time = 0.0
+
+# Source 2: bottom medium, right side (faster medium)
+[[sources]]
+x         = 875
+z         = 700
+amplitude = 25.0
+frequency = 20.0
+trigger_time = 0.0
+
+[visualization]
+field        = "vmag"
+video_length = 10.0
+fps          = 30.0
+iteration    = 2
+image_width  = 1200
+image_height = 1000
