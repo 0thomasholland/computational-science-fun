@@ -1,9 +1,11 @@
 # Dual Limit Cycle SDE
 
-A 2D stochastic dynamical system with two stable limit cycles at arbitrary positions
-and radii. Noise drives rare (Kramers-type) transitions between them. Includes both
-a stochastic trajectory integrator and a Fokker-Planck PDE solver that evolves the
-probability density forward in time.
+A Julia simulation of a 2D stochastic dynamical system with two stable limit cycles at
+arbitrary positions and radii. Noise drives rare (Kramers-type) transitions between them.
+
+Two solvers are included:
+- **SDE integrator** — Itô trajectory simulation with transition detection
+- **Fokker-Planck solver** — evolves the probability density ρ(x,y,t) forward in time on a grid
 
 ---
 

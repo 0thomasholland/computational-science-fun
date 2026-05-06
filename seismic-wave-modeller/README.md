@@ -1,81 +1,64 @@
-# Seismic wave forward modeller
+# Seismic Wave Forward Modeller
 
 ![An example output](output/3.gif)
 
-## Todos
+A 2D elastic wave forward modeller written in Rust. Solves the velocity-stress formulation of the elastic wave equation on a staggered finite-difference grid, producing animated snapshots of seismic wavefield propagation through heterogeneous media.
 
-- Take input files
-- More boundary conditions
-- Command line tools
+## Features
+
+- Staggered-grid finite differences (Virieux scheme) for P- and S-wave propagation
+- Heterogeneous material properties: variable P-wave velocity (Vp), S-wave velocity (Vs), and density (ρ)
+- Harmonic averaging at grid interfaces for stable material discontinuities
+- TOML config files for easy parameter control
+- Rayon-parallelised inner loops
+- GIF output of wavefield snapshots
 
 ## Theory
 
-Grid cell layout:
+Wavefields are stored on a staggered grid:
 
-~~~
+```
 σxx,σzz ----vx---- σxx,σzz ----vx---- σxx,σzz
-   |                 |                 |
    |                 |                 |
    vz      σxz      vz      σxz      vz
    |                 |                 |
-   |                 |                 |
 σxx,σzz ----vx---- σxx,σzz ----vx---- σxx,σzz
-   |                 |                 |
-   |                 |                 |
-   vz      σxz      vz      σxz      vz
-   |                 |                 |
-   |                 |                 |
-σxx,σzz ----vx---- σxx,σzz ----vx---- σxx,σzz
-~~~
+```
 
-For arrays:
+**Velocity updates** (from momentum conservation):
 
-- `vx[i][k]` - represents velocity at position (i+½, k) physically
-- `vz[i][k]` - represents velocity at position (i, k+½) physically
-- `sigma_xx[i][k]` - represents stress at position (i, k) physically
-- `sigma_zz[i][k]` - represents stress at position (i, k) physically
-- `sigma_xz[i][k]` - represents stress at position (i+½, k+½) physically
+$$\frac{\partial v_x}{\partial t} = \frac{1}{\rho} \left[ \frac{\partial \sigma_{xx}}{\partial x} + \frac{\partial \sigma_{xz}}{\partial z} \right], \qquad \frac{\partial v_z}{\partial t} = \frac{1}{\rho} \left[ \frac{\partial \sigma_{xz}}{\partial x} + \frac{\partial \sigma_{zz}}{\partial z} \right]$$
 
-### Equations
+**Stress updates** (from the elastic constitutive relation):
 
-Velocity Updates (from Momentum Equation)
-
-$$\frac{\partial v_x}{\partial t} = \frac{1}{\rho} \left[ \frac{\partial \sigma_{xx}}{\partial x} + \frac{\partial \sigma_{xz}}{\partial z} \right]$$
-
-$$\frac{\partial v_z}{\partial t} = \frac{1}{\rho} \left[ \frac{\partial \sigma_{xz}}{\partial x} + \frac{\partial \sigma_{zz}}{\partial z} \right]$$
-
-Stress Updates (from Constitutive Relation)
-
-$$\frac{\partial \sigma_{xx}}{\partial t} = (\lambda + 2\mu) \frac{\partial v_x}{\partial x} + \lambda \frac{\partial v_z}{\partial z}$$
-
-$$\frac{\partial \sigma_{zz}}{\partial t} = \lambda \frac{\partial v_x}{\partial x} + (\lambda + 2\mu) \frac{\partial v_z}{\partial z}$$
+$$\frac{\partial \sigma_{xx}}{\partial t} = (\lambda + 2\mu) \frac{\partial v_x}{\partial x} + \lambda \frac{\partial v_z}{\partial z}, \qquad \frac{\partial \sigma_{zz}}{\partial t} = \lambda \frac{\partial v_x}{\partial x} + (\lambda + 2\mu) \frac{\partial v_z}{\partial z}$$
 
 $$\frac{\partial \sigma_{xz}}{\partial t} = \mu \left[ \frac{\partial v_x}{\partial z} + \frac{\partial v_z}{\partial x} \right]$$
 
-### Discretization
+Time-stepping uses a leap-frog scheme: velocities at half-steps, stresses at full steps.
 
-- Velocities at time n+0.5
+## Building and Running
 
-- Update stresses to time n+1 using velocities at n+0.5
+Requires Rust (stable) and Cargo.
 
-- Update velocities to time n+1.5 using stresses at n+1
+```bash
+cargo build --release
+cargo run --release -- --config example_config.toml
+```
 
-### Material Properties
+See `example_config.toml` and `minimal_config.toml` for parameter reference.
 
-Store material properties at the same locations as normal stresses (i, k)
+## Boundary Conditions
 
-Use harmonic averaging for properties at velocity and shear stress locations.
+| Type | Status | Description |
+|------|--------|-------------|
+| Rigid | Implemented | Zero velocity at edges — causes reflections |
+| Damping (sponge) | Planned | Absorbing boundary layer ~20–50 cells thick |
+| Free surface | Planned | Zero normal stress at top surface |
 
-Harmonic mean: 2ab/(a+b)
+## Todos
 
-### Boundary Conditions
-
-- Rigid (starting implementation)
-  - Velocities are zero at the edges
-  - Causes reflections
-- Damping
-  - Add a "sponge layer" around the edges (maybe 20-50 grid points thick)
-  - Gradually decrease velocities and stresses to zero in this layer
-- Free surface
-  - Particles can move freely
-  - Normal stress components (σxz, σzz) are zero at the surface
+- [ ] Accept input velocity/density model files
+- [ ] Implement absorbing (sponge) and free-surface boundary conditions
+- [ ] Command-line interface for common parameters
+- [ ] Loop over maximum Vp for stability CFL check

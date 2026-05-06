@@ -1,43 +1,46 @@
-# Critical Cellular Automation
+# Critical Cellular Automaton (Sandpile Model)
 
-Written in Fortran, this code is based on a 3D grid that has the following conditions:
+A Fortran implementation of the [Bak–Tang–Wiesenfeld sandpile model](https://en.wikipedia.org/wiki/Abelian_sandpile_model) — a canonical example of self-organised criticality (SOC). Grains are added one at a time to a grid; cells that exceed a critical threshold topple, redistributing energy to their neighbours and potentially triggering avalanches of all sizes.
 
-- Each cell (i,j,k) on the grid has a positive integer value
-- Each cell on the grid has a critical maximum of a value of 6; above this value it redistributes it to the surrounding 6 cells (e.g. i+1,j+1,k+1 += 1) and sets it value to what it was less 6 (i,j,k -= 6).
+Three variants are provided:
 
-Initial starting conditions:
+| Directory | Description |
+|-----------|-------------|
+| `2d/` | 2D grid, criticality threshold 4, small grids (~20×20) |
+| `3d/` | 3D grid, criticality threshold 6, redistributes to 6 face-adjacent neighbours |
+| `multithreading/` | 2D OpenMP-parallelised version with checkerboard domain decomposition for large grids (2000×2000) |
 
-- Either from a blank canvas
-- Random values between 0-5 randomly selected and allocated to each grid point
+## Physics
 
-Within each logic loop:
+- Each cell holds a non-negative integer grain count.
+- A cell is **critical** when its count exceeds the threshold (4 in 2D, 6 in 3D).
+- Critical cells **topple**: they lose the threshold amount and each neighbour gains 1.
+- After each full relaxation (no critical cells remain), one grain is added to a random cell.
+- The system self-organises to a critical state where avalanche sizes follow a power law — a signature of SOC.
 
-- Checks if any of the cells are above 6
-- If they are above 6 the points redistribute
-- This check and redistribute occurs until reaches an equilibrium, and each time through the state is written to disk via appending a file
-- Then a random point is chosen and 1 is added to it's value
+## Building and Running
 
-A python script accompanies which takes the output file and plots a 3D revolving video of this, where the opacity of each 3D cell is related to its criticality.
+Requires a Fortran compiler (`gfortran`) and `make`.
 
-For the 2D case it does the same but the criticality point is 4.
-
-## Running
-
-```base
+```bash
+cd 2d/   # or 3d/ or multithreading/
 make rebuild
 make run
 ```
 
-Needs a fortran compiler and make installed.
+The multithreading variant requires OpenMP support (`gfortran -fopenmp`).
 
-## Python Visualization
+## Visualisation
 
-Needs to have numpy and matplotlib pip installed and ffmpeg also installed.
+Output is written to `output.csv` as a sequence of grid states. A Python script renders a video:
 
 ```bash
-python3 visualize.py --output animation.mp4 --fps 15 --gridsize X Y (Z) --input output.csv
+python3 visualise.py --output animation.mp4 --fps 15 --gridsize X Y [Z] --input output.csv
 ```
 
-## Next steps
+Requires `numpy`, `matplotlib`, and `ffmpeg`.
 
-- [ ] Add a hook that saves the number of steps between each avalanche, and the size of each avalanche (number of cells that topple) to a file for later analysis of "magnitude" vs "frequency" of avalanches.
+## Next Steps
+
+- [ ] Record avalanche sizes and inter-event times to analyse the magnitude–frequency power law.
+- [ ] Add configurable grid size and iteration count via command-line arguments.
