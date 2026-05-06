@@ -77,16 +77,13 @@ impl SimulationParams {
         amplitude: f64,
         cfl_safety: f64,
     ) -> Self {
-        // Calculate appropriate t0 from f0
-        // Typically t0 = 1.2 / f0 so the wavelet starts near zero
-        let source_t0 = 1.2 / source_f0;
-
         Self {
             dt,
             nt,
             report_period,
+            // trigger_time=0: ricker_wavelet already applies its own t0=1.2/f offset internally
             sources: vec![Source::with_delay(
-                source_i, source_k, amplitude, source_f0, source_t0,
+                source_i, source_k, amplitude, source_f0, 0.0,
             )],
             cfl_safety,
         }
@@ -100,7 +97,7 @@ impl SimulationParams {
 
     pub fn check_cfl(&self, dx: f64, dz: f64, vp_max: f64) -> bool {
         // CFL condition for 2D elastic waves with staggered grid:
-        // dt <= CFL_safety × min(dx, dz) / vp_max
+        // dt <= CFL_safety × min(dx, dz) / (vp_max × √2)
         // where CFL_safety is typically 0.5
         // returns true is safe, false if unstable
 
@@ -122,7 +119,6 @@ pub struct Simulation {
     pub grid: Grid,
     pub materials: MaterialProperties,
     pub wavefield_current: Wavefield,
-    pub wavefield_old: Wavefield,
     pub params: SimulationParams,
     current_timestep: usize,
 }
@@ -152,15 +148,12 @@ impl Simulation {
                 );
             }
         }
-        // Create wavefields
         let wavefield_current = Wavefield::new(grid.nx, grid.nz);
-        let wavefield_old = Wavefield::new(grid.nx, grid.nz);
 
         Self {
             grid,
             materials,
             wavefield_current,
-            wavefield_old,
             params,
             current_timestep: 0,
         }
@@ -383,8 +376,11 @@ impl Simulation {
         let nx = self.grid.nx;
         let nz = self.grid.nz;
 
-        // Rigid boundaries: set velocities to zero at edges
-        // This is simple but causes reflections
+        // Rigid (Dirichlet) boundaries: vx=vz=0 at all edges.
+        // Note: this is a clamped-wall BC, not a free surface. It reflects P-waves
+        // with wrong amplitude ratios, inverts S-wave polarity relative to a true
+        // free surface, and does not generate Rayleigh waves. Absorbing BCs (e.g.
+        // Clayton–Engquist or PML) would suppress artificial edge reflections.
 
         // Left and right boundaries
         for k in 0..nz {
@@ -520,14 +516,15 @@ impl Simulation {
                 let mu = self.materials.mu[[i, k]];
                 let lambda_2mu = lambda + 2.0 * mu;
 
-                // Compliance-based energy density:
-                //   0.5 * (σ_xx² + σ_zz²) / (λ+2μ)
-                //   - λ * σ_xx * σ_zz / (μ * (λ+2μ))
-                //   + σ_xz² / (2μ)
+                // Compliance-based energy density W = 0.5 σ:S:σ for 2D plane-strain isotropic:
+                //   W = [(λ+2μ)(σ_xx²+σ_zz²) - 2λ σ_xx σ_zz] / [8μ(λ+μ)] + σ_xz²/(2μ)
+                // Derived from inverting the 2×2 stiffness matrix for normal stresses.
                 // Guard against zero moduli (vacuum / unset cells)
                 let pe_cell = if lambda_2mu > 0.0 && mu > 0.0 {
-                    0.5 * (sigma_xx * sigma_xx + sigma_zz * sigma_zz) / lambda_2mu
-                        - lambda * sigma_xx * sigma_zz / (mu * lambda_2mu)
+                    let denom = 8.0 * mu * (lambda + mu);
+                    (lambda_2mu * (sigma_xx * sigma_xx + sigma_zz * sigma_zz)
+                        - 2.0 * lambda * sigma_xx * sigma_zz)
+                        / denom
                         + 0.5 * sigma_xz * sigma_xz / mu
                 } else {
                     0.0

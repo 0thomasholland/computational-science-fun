@@ -86,41 +86,39 @@ impl Wavefield {
         // For i in 1..nx-1 and k in 1..nz-1:
         //   dvx_dz = (vx[[i, k+1]] - vx[[i, k-1]]) / (2.0 * dz)
         //   dvz_dx = (vz[[i+1, k]] - vz[[i-1, k]]) / (2.0 * dx)
-        //   curl[[i, k]] = dvx_dz - dvz_dx
+        //   curl[[i, k]] = dvz_dx - dvx_dz   (y-component of ∇×v in 2D)
 
         for i in 1..nx - 1 {
             for k in 1..nz - 1 {
                 let dvx_dz = (self.vx[[i, k + 1]] - self.vx[[i, k - 1]]) / (2.0 * dz);
                 let dvz_dx = (self.vz[[i + 1, k]] - self.vz[[i - 1, k]]) / (2.0 * dx);
-                curl[[i, k]] = dvx_dz - dvz_dx;
+                curl[[i, k]] = dvz_dx - dvx_dz;
             }
         }
 
         // Boundaries: use one-sided differences
         for k in 0..nz {
             // Left boundary (i=0)
-            curl[[0, k]] = (self.vx[[0, k.min(nz - 1)]] - self.vx[[0, k.saturating_sub(1)]]) / dz
-                - (self.vz[[1, k]] - self.vz[[0, k]]) / dx;
+            curl[[0, k]] = (self.vz[[1, k]] - self.vz[[0, k]]) / dx
+                - (self.vx[[0, k.min(nz - 1)]] - self.vx[[0, k.saturating_sub(1)]]) / dz;
             // Right boundary (i=nx-1)
             curl[[nx - 1, k]] =
-                (self.vx[[nx - 1, k.min(nz - 1)]] - self.vx[[nx - 1, k.saturating_sub(1)]]) / dz
-                    - (self.vz[[nx - 1, k]] - self.vz[[nx - 2, k]]) / dx;
+                (self.vz[[nx - 1, k]] - self.vz[[nx - 2, k]]) / dx
+                    - (self.vx[[nx - 1, k.min(nz - 1)]] - self.vx[[nx - 1, k.saturating_sub(1)]]) / dz;
         }
         for i in 0..nx {
             // Top boundary (k=0)
-            curl[[i, 0]] = (self.vx[[i, 1]] - self.vx[[i, 0]]) / dz
-                - if i + 1 < nx {
-                    (self.vz[[i + 1, 0]] - self.vz[[i, 0]]) / dx
-                } else {
-                    0.0
-                };
+            curl[[i, 0]] = if i + 1 < nx {
+                (self.vz[[i + 1, 0]] - self.vz[[i, 0]]) / dx
+            } else {
+                0.0
+            } - (self.vx[[i, 1]] - self.vx[[i, 0]]) / dz;
             // Bottom boundary (k=nz-1)
-            curl[[i, nz - 1]] = (self.vx[[i, nz - 1]] - self.vx[[i, nz - 2]]) / dz
-                - if i + 1 < nx {
-                    (self.vz[[i + 1, nz - 1]] - self.vz[[i, nz - 1]]) / dx
-                } else {
-                    0.0
-                };
+            curl[[i, nz - 1]] = if i + 1 < nx {
+                (self.vz[[i + 1, nz - 1]] - self.vz[[i, nz - 1]]) / dx
+            } else {
+                0.0
+            } - (self.vx[[i, nz - 1]] - self.vx[[i, nz - 2]]) / dz;
         }
 
         curl

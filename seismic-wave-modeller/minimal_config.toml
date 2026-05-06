@@ -3,25 +3,27 @@
 # Use this as a starting point for quick simulations
 
 [grid]
-nx = 400
-nz = 400
-dx = 0.125
-dz = 0.125
+nx = 300
+nz = 300
+dx = 10.0
+dz = 10.0
 
 [materials]
-vp = 6000.0
-vs = 4000.0
-rho = 3000.0
+# Upper/mid crust: vp=3000 m/s, vs=1732 m/s (Vp/√3), rho=2700 kg/m³
+vp = 3000.0
+vs = 1732.0
+rho = 2700.0
 
 [simulation]
-total_time = 0.012
+# Ricker peak at t0=1.2/f=0.06 s; wave crosses 3 km domain in ~1.0 s
+total_time = 1.5
 # dt will be auto-computed from CFL condition with default cfl_safety=0.5
 
 [[sources]]
-x = 200
-z = 200
+x = 150
+z = 150
 amplitude = 25.0
-frequency = 10.0
+frequency = 20.0
 
 [visualization]
 # Uses defaults: video_length=10.0, fps=30.0, field=vmag, image_width=1200, image_height=1000

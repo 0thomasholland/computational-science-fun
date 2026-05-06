@@ -1,0 +1,40 @@
+[grid]
+nx = 800
+nz = 800
+dx = 10.0
+dz = 10.0
+
+[materials]
+vp  = 3000.0
+vs  = 1732.0
+rho = 2700.0
+
+[simulation]
+total_time = 5.0
+cfl_safety = 0.5
+
+[[sources]]
+x         = 200
+z         = 400
+amplitude = 25.0
+frequency = 20.0
+
+[[sources]]
+x         = 400
+z         = 200
+amplitude = 25.0
+frequency = 20.0
+
+[[sources]]
+x         = 600
+z         = 600
+amplitude = 25.0
+frequency = 20.0
+
+[visualization]
+field        = "vmag"
+video_length = 25.0
+fps          = 30.0
+iteration    = 20
+image_width  = 1200
+image_height = 1000

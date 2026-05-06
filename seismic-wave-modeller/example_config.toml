@@ -3,60 +3,62 @@
 
 [grid]
 # Grid dimensions (number of grid points)
-nx = 800
-nz = 800
-# Grid spacing (meters)
-dx = 0.125
-dz = 0.125
+nx = 500
+nz = 500
+# Grid spacing (meters) — 10 m gives ~15 grid points per wavelength at 20 Hz / 3000 m/s
+dx = 10.0
+dz = 10.0
 
 [materials]
+# Upper/mid crust: vp=3000 m/s, vs=1732 m/s (Vp/√3, Poisson ν≈0.25), rho=2700 kg/m³
 # P-wave velocity (m/s)
-vp = 6000.0
+vp = 3000.0
 # S-wave velocity (m/s) - must be less than vp
-vs = 4000.0
+vs = 1732.0
 # Density (kg/m³)
-rho = 3000.0
+rho = 2700.0
 
 [simulation]
 # Time step (seconds)
 # If omitted, will be automatically computed from CFL condition
-# dt = 0.00001
+# dt = 0.001
 
 # Total simulation time (seconds)
-total_time = 0.012
+# Ricker peak at t0=1.2/f=0.06 s; wave crosses 5 km domain in ~1.7 s
+total_time = 2.0
 
 # Progress reporting frequency (print status every N steps)
 report_period = 100
 
 # CFL safety factor (must be in range 0 < cfl_safety <= 1)
 # Default: 0.5
-# When dt is auto-computed: dt = cfl_safety * min(dx, dz) / vp_max
+# When dt is auto-computed: dt = cfl_safety * min(dx, dz) / (vp_max * √2)
 cfl_safety = 0.5
 
 # Define multiple sources using [[sources]] array syntax
 [[sources]]
 # Grid position of source (grid points)
-x = 200
-z = 400
+x = 125
+z = 250
 # Source amplitude (energy strength)
 amplitude = 25.0
-# Source frequency (Hz) - controls Ricker wavelet frequency
-frequency = 10.0
+# Source frequency (Hz) - controls Ricker wavelet frequency; wavelength = vp/f = 150 m
+frequency = 20.0
 # Trigger delay (seconds) - delay before source starts radiating
 trigger_time = 0.0
 
 [[sources]]
-x = 400
-z = 400
+x = 250
+z = 250
 amplitude = 25.0
-frequency = 10.0
+frequency = 20.0
 trigger_time = 0.0
 
 [[sources]]
-x = 600
-z = 400
+x = 375
+z = 250
 amplitude = 25.0
-frequency = 10.0
+frequency = 20.0
 trigger_time = 0.0
 
 [visualization]

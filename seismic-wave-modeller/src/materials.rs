@@ -61,17 +61,16 @@ impl MaterialProperties {
     }
 
     fn average_to_vx(rho: &Array2<f64>) -> Array2<f64> {
-        // Average to vx positions (i+1/2, k)
+        // Average density to vx positions (i+1/2, k) using arithmetic mean.
+        // Harmonic mean is correct for elastic moduli (enforces stress continuity);
+        // density is an inertial quantity and must use arithmetic mean (Moczo et al. 2002).
         let (nx, nz) = rho.dim();
         let mut result = Array2::<f64>::zeros((nx, nz));
 
-        // For each (i, k):
-        //   If i < nx-1: result[[i,k]] = harmonic_mean(rho[[i,k]], rho[[i+1,k]])
-        //   Else: result[[i,k]] = rho[[i,k]] (boundary case)
         for i in 0..nx {
             for k in 0..nz {
                 if i < nx - 1 {
-                    result[[i, k]] = Self::harmonic_mean(rho[[i, k]], rho[[i + 1, k]]);
+                    result[[i, k]] = 0.5 * (rho[[i, k]] + rho[[i + 1, k]]);
                 } else {
                     result[[i, k]] = rho[[i, k]];
                 }
@@ -81,18 +80,15 @@ impl MaterialProperties {
     }
 
     fn average_to_vz(rho: &Array2<f64>) -> Array2<f64> {
-        // Average to vz positions (i, k+1/2)
-        // Similar to average_to_vx but in z direction
+        // Average density to vz positions (i, k+1/2) using arithmetic mean.
+        // See average_to_vx for rationale.
         let (nx, nz) = rho.dim();
         let mut result = Array2::<f64>::zeros((nx, nz));
 
-        // For each (i, k):
-        //   If k < nz-1: result[[i,k]] = harmonic_mean(rho[[i,k]], rho[[i,k+1]])
-        //   Else: result[[i,k]] = rho[[i,k]] (boundary case)
         for i in 0..nx {
             for k in 0..nz {
                 if k < nz - 1 {
-                    result[[i, k]] = Self::harmonic_mean(rho[[i, k]], rho[[i, k + 1]]);
+                    result[[i, k]] = 0.5 * (rho[[i, k]] + rho[[i, k + 1]]);
                 } else {
                     result[[i, k]] = rho[[i, k]];
                 }

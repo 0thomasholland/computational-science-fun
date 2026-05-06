@@ -42,12 +42,16 @@ impl WavefieldVisualiser {
         root.fill(&WHITE)?;
 
         let (nx, nz) = data.dim();
-        let max_abs = data.iter().map(|&v| v.abs()).fold(0.0_f64, f64::max);
 
-        // Clip to a fraction of max to make waves visible
-        let clip_factor = 0.5; // Adjust this value between 0.01 and 0.5
-        let min_val = -max_abs * clip_factor;
-        let max_val = max_abs * clip_factor;
+        // Use 99th-percentile amplitude as the colour scale limit so only the
+        // top 1% of values saturate, rather than clipping at a fixed fraction
+        // of the absolute max (which over-saturates large-amplitude features).
+        let mut abs_vals: Vec<f64> = data.iter().map(|v| v.abs()).collect();
+        abs_vals.sort_by(|a, b| a.total_cmp(b));
+        let scale = abs_vals[((abs_vals.len() as f64) * 0.99) as usize].max(1e-30);
+
+        let min_val = -scale;
+        let max_val = scale;
 
         // Calculate physical dimensions
         let x_max = (nx as f64) * self.dx;
