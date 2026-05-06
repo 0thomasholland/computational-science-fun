@@ -7,6 +7,9 @@ EXECUTABLE = critical_cell
 # Use /usr/bin/time for more detailed output, or just 'time' for the shell default
 TIME = /usr/bin/time -p
 
+debug: FFLAGS += -g -fcheck=bounds
+debug: $(EXECUTABLE)
+
 all: $(EXECUTABLE)
 
 $(EXECUTABLE): $(OBJECTS)
@@ -30,4 +33,6 @@ run: $(EXECUTABLE)
 
 rebuild: clean all
 
-.PHONY: all clean run rebuild
+pipeline: clean run visualise clean
+
+.PHONY: all debug clean run rebuild visualise pipeline

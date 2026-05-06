@@ -12,9 +12,9 @@ program critical_cellular_automaton
 
     integer :: nx, ny
 
-    nx = 20
-    ny = 20
-    max_iterations = 4000
+    nx = 40
+    ny = 40
+    max_iterations = 1000
     init_type = 'random'
     output_file = 'output.csv'
 
@@ -45,7 +45,7 @@ program critical_cellular_automaton
             call redistribute_cells(grid, output_unit)
         end do
 
-        if (mod(iteration, max_iterations/20) == 0) then
+        if (mod(iteration, max(max_iterations/20, 1)) == 0) then
             print *, 'Iteration: ', iteration, ' Total grains: ', get_sum(grid)
         end if
 

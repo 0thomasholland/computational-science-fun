@@ -33,7 +33,16 @@ contains
             grid%cells = 0
 
         case('random')
-            call random_seed()
+            block
+                integer :: seed_n, seed_clock
+                integer, allocatable :: seed_arr(:)
+                call random_seed(size=seed_n)
+                allocate(seed_arr(seed_n))
+                call system_clock(seed_clock)
+                seed_arr = seed_clock + 37 * [(i, i=1,seed_n)]
+                call random_seed(put=seed_arr)
+                deallocate(seed_arr)
+            end block
             do i = 1, nx
                 do j = 1, ny
                     do k = 1, nz
@@ -58,30 +67,37 @@ contains
         integer, intent(in) :: unit
         integer :: i, j, k
         logical :: redistributed
+        integer, allocatable :: delta(:,:,:)
 
         grid%iteration = grid%iteration + 1
 
+        allocate(delta(grid%nx, grid%ny, grid%nz))
+
         do while (.true.)
             redistributed = .false.
+            delta = 0
             do i = 1, grid%nx
                 do j = 1, grid%ny
                     do k = 1, grid%nz
                         if (grid%cells(i,j,k) >= 6) then
-                            grid%cells(i,j,k) = grid%cells(i,j,k) - 6
-                            if (i > 1) grid%cells(i-1,j,k) = grid%cells(i-1,j,k) + 1
-                            if (i < grid%nx) grid%cells(i+1,j,k) = grid%cells(i+1,j,k) + 1
-                            if (j > 1) grid%cells(i,j-1,k) = grid%cells(i,j-1,k) + 1
-                            if (j < grid%ny) grid%cells(i,j+1,k) = grid%cells(i,j+1,k) + 1
-                            if (k > 1) grid%cells(i,j,k-1) = grid%cells(i,j,k-1) + 1
-                            if (k < grid%nz) grid%cells(i,j,k+1) = grid%cells(i,j,k+1) + 1
+                            delta(i,j,k) = delta(i,j,k) - 6
+                            if (i > 1) delta(i-1,j,k) = delta(i-1,j,k) + 1
+                            if (i < grid%nx) delta(i+1,j,k) = delta(i+1,j,k) + 1
+                            if (j > 1) delta(i,j-1,k) = delta(i,j-1,k) + 1
+                            if (j < grid%ny) delta(i,j+1,k) = delta(i,j+1,k) + 1
+                            if (k > 1) delta(i,j,k-1) = delta(i,j,k-1) + 1
+                            if (k < grid%nz) delta(i,j,k+1) = delta(i,j,k+1) + 1
                             redistributed = .true.
                         end if
                     end do
                 end do
             end do
+            grid%cells = grid%cells + delta
             call write_grid_diff(grid, unit)
             if (.not. redistributed) exit
         end do
+
+        deallocate(delta)
 
     end subroutine redistribute_cells
 

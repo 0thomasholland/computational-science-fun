@@ -32,7 +32,16 @@ contains
             grid%cells = 0
 
         case('random')
-            call random_seed()
+            block
+                integer :: seed_n, seed_clock
+                integer, allocatable :: seed_arr(:)
+                call random_seed(size=seed_n)
+                allocate(seed_arr(seed_n))
+                call system_clock(seed_clock)
+                seed_arr = seed_clock + 37 * [(i, i=1,seed_n)]
+                call random_seed(put=seed_arr)
+                deallocate(seed_arr)
+            end block
             do i = 1, nx
                 do j = 1, ny
                     call random_number(rand_val)
@@ -55,33 +64,37 @@ contains
         integer, intent(in) :: unit
         integer :: i, j
         logical :: redistributed
+        integer, allocatable :: delta(:,:)
 
         grid%iteration = grid%iteration + 1
 
+        allocate(delta(grid%nx, grid%ny))
+
         do while (.true.)
             redistributed = .false.
+            delta = 0
 
-            ! Phase 1: Process even cells (i+j is even) - minimal atomic contention
             !$omp parallel do collapse(2) reduction(.or.:redistributed)
             do i = 1, grid%nx
                 do j = 1, grid%ny
-                    if (mod(i+j, 2) == 0 .and. grid%cells(i,j) >= 4) then
-                        grid%cells(i,j) = grid%cells(i,j) - 4
+                    if (grid%cells(i,j) >= 4) then
+                        !$omp atomic
+                        delta(i,j) = delta(i,j) - 4
                         if (i > 1) then
                             !$omp atomic
-                            grid%cells(i-1,j) = grid%cells(i-1,j) + 1
+                            delta(i-1,j) = delta(i-1,j) + 1
                         end if
                         if (i < grid%nx) then
                             !$omp atomic
-                            grid%cells(i+1,j) = grid%cells(i+1,j) + 1
+                            delta(i+1,j) = delta(i+1,j) + 1
                         end if
                         if (j > 1) then
                             !$omp atomic
-                            grid%cells(i,j-1) = grid%cells(i,j-1) + 1
+                            delta(i,j-1) = delta(i,j-1) + 1
                         end if
                         if (j < grid%ny) then
                             !$omp atomic
-                            grid%cells(i,j+1) = grid%cells(i,j+1) + 1
+                            delta(i,j+1) = delta(i,j+1) + 1
                         end if
                         redistributed = .true.
                     end if
@@ -89,30 +102,10 @@ contains
             end do
             !$omp end parallel do
 
-            ! Phase 2: Process odd cells (i+j is odd) - minimal atomic contention
-            !$omp parallel do collapse(2) reduction(.or.:redistributed)
+            !$omp parallel do collapse(2)
             do i = 1, grid%nx
                 do j = 1, grid%ny
-                    if (mod(i+j, 2) == 1 .and. grid%cells(i,j) >= 4) then
-                        grid%cells(i,j) = grid%cells(i,j) - 4
-                        if (i > 1) then
-                            !$omp atomic
-                            grid%cells(i-1,j) = grid%cells(i-1,j) + 1
-                        end if
-                        if (i < grid%nx) then
-                            !$omp atomic
-                            grid%cells(i+1,j) = grid%cells(i+1,j) + 1
-                        end if
-                        if (j > 1) then
-                            !$omp atomic
-                            grid%cells(i,j-1) = grid%cells(i,j-1) + 1
-                        end if
-                        if (j < grid%ny) then
-                            !$omp atomic
-                            grid%cells(i,j+1) = grid%cells(i,j+1) + 1
-                        end if
-                        redistributed = .true.
-                    end if
+                    grid%cells(i,j) = grid%cells(i,j) + delta(i,j)
                 end do
             end do
             !$omp end parallel do
@@ -121,6 +114,8 @@ contains
             if (.not. redistributed) exit
         end do
 
+        deallocate(delta)
+
     end subroutine redistribute_cells
 
 
@@ -128,13 +123,16 @@ contains
         type(grid_type), intent(in) :: grid
         logical :: has_critical
         integer :: i, j
+        logical :: found_flag
 
         has_critical = .false.
-        !$omp parallel do collapse(2) reduction(.or.:has_critical)
+        found_flag = .false.
+        !$omp parallel do collapse(2) reduction(.or.:has_critical) shared(found_flag)
         do i = 1, grid%nx
             do j = 1, grid%ny
-                if (grid%cells(i,j) >= 4) then
+                if (.not. found_flag .and. grid%cells(i,j) >= 4) then
                     has_critical = .true.
+                    found_flag = .true.
                 end if
             end do
         end do
@@ -214,18 +212,18 @@ contains
 
         has_diff = .false.
 
-        ! Check if there are any differences
+        ! Check if there are any differences (parallelised scan)
+        !$omp parallel do collapse(2) reduction(.or.:has_diff)
         do i = 1, grid%nx
             do j = 1, grid%ny
                 if (grid%cells(i,j) /= grid%prev_cells(i,j)) then
                     has_diff = .true.
-                    exit
                 end if
             end do
-            if (has_diff) exit
         end do
+        !$omp end parallel do
 
-        ! Write header only if there are differences
+        ! Write header only if there are differences (I/O must remain serial)
         if (has_diff) then
             write(unit,'(A,I0)') '#D', grid%iteration
             do i = 1, grid%nx
@@ -237,8 +235,14 @@ contains
             end do
         end if
 
-        ! Update previous state
-        grid%prev_cells = grid%cells
+        ! Update previous state (parallelised)
+        !$omp parallel do collapse(2)
+        do i = 1, grid%nx
+            do j = 1, grid%ny
+                grid%prev_cells(i,j) = grid%cells(i,j)
+            end do
+        end do
+        !$omp end parallel do
 
     end subroutine write_grid_diff
 

@@ -1,5 +1,6 @@
 use ndarray::Array2;
 use plotters::prelude::*;
+use std::io::Write;
 use std::path::Path;
 
 pub struct WavefieldVisualiser {
@@ -85,7 +86,9 @@ impl WavefieldVisualiser {
         }
 
         root.present()?;
-        println!("Saved frame: {}", filename);
+        // Overwrite a single terminal line instead of flooding output with one line per frame
+        print!("\rSaved frame: {}   ", filename);
+        let _ = std::io::stdout().flush();
         Ok(())
     }
 
@@ -115,11 +118,11 @@ impl WavefieldVisualiser {
 
         // Calculate percentiles for each wave type independently
         let mut p_abs: Vec<f64> = p_wave.iter().map(|v| v.abs()).collect();
-        p_abs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        p_abs.sort_by(|a, b| a.total_cmp(b));
         let p_max = p_abs[((p_abs.len() as f64) * 0.98) as usize];
 
         let mut s_abs: Vec<f64> = s_wave.iter().map(|v| v.abs()).collect();
-        s_abs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        s_abs.sort_by(|a, b| a.total_cmp(b));
         let s_max = s_abs[((s_abs.len() as f64) * 0.98) as usize];
 
         let x_max = (nx as f64) * self.dx;
@@ -168,7 +171,8 @@ impl WavefieldVisualiser {
         }
 
         root.present()?;
-        println!("Saved P-S overlay frame: {}", filename);
+        print!("\rSaved P-S overlay frame: {}   ", filename);
+        let _ = std::io::stdout().flush();
         Ok(())
     }
 }

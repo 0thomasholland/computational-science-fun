@@ -48,6 +48,7 @@ program critical_cellular_automaton
             call redistribute_cells(grid, output_unit)
         end do
 
+
         if (mod(iteration, 10) == 0) then
             print *, 'Iteration: ', iteration, ' Total grains: ', get_sum(grid)
         end if

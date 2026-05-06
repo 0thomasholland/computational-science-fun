@@ -2,7 +2,6 @@ use crate::grid::Grid;
 use crate::materials::MaterialProperties;
 use crate::visualisation::WavefieldVisualiser;
 use crate::wavefield::Wavefield;
-use ndarray::Zip;
 use rayon::prelude::*;
 use std::f64::consts::PI;
 
@@ -47,15 +46,13 @@ impl Source {
         self.triggered = true;
     }
     pub fn ricker_wavelet(&self, t: f64) -> f64 {
-        // Normalized Ricker wavelet for this source
-        // Peak amplitude is frequency-independent when properly normalized
-        let tau = t - self.trigger_time.unwrap_or(0.0);
+        // Ricker wavelet with time-shift t0 so the wavelet starts near zero
+        // tau = 0 at the trigger time, but the wavelet peak is at tau = t0 = 1.2/f
+        let t0 = 1.2 / self.frequency;
+        let tau = t - self.trigger_time.unwrap_or(0.0) - t0;
         let arg = (PI * self.frequency * tau).powi(2);
-        let wavelet = (1.0 - 2.0 * arg) * (-arg).exp();
-        // Normalize by peak amplitude to maintain constant energy across frequencies
-        // Peak of (1 - 2*arg) * exp(-arg) occurs at arg = 0.5, with value ~ 0.3677
-        let normalization = 0.75 * PI * self.frequency * self.frequency;
-        wavelet * normalization
+        // Standard unit-amplitude Ricker: peak = 1 at tau = 0 (i.e., t = trigger_time + t0)
+        (1.0 - 2.0 * arg) * (-arg).exp()
     }
 }
 
@@ -89,7 +86,7 @@ impl SimulationParams {
             nt,
             report_period,
             sources: vec![Source::with_delay(
-                source_i, source_k, source_f0, amplitude, source_t0,
+                source_i, source_k, amplitude, source_f0, source_t0,
             )],
             cfl_safety,
         }
@@ -108,16 +105,16 @@ impl SimulationParams {
         // returns true is safe, false if unstable
 
         let min_spacing = dx.min(dz);
-        let dt_max = self.cfl_safety * min_spacing / vp_max;
+        // 2D CFL condition requires 1/√2 factor
+        let dt_max = self.cfl_safety * min_spacing / (vp_max * 2.0_f64.sqrt());
 
         self.dt <= dt_max
     }
 
     pub fn compute_stable_dt(&self, dx: f64, dz: f64, vp_max: f64) -> f64 {
         // Helper function to compute a stable time step
-        // Return CFL_safety × min(dx, dz) / vp_max
-
-        self.cfl_safety * dx.min(dz) / vp_max
+        // 2D CFL: CFL_safety × min(dx, dz) / (vp_max × √2)
+        self.cfl_safety * dx.min(dz) / (vp_max * 2.0_f64.sqrt())
     }
 }
 
@@ -349,29 +346,36 @@ impl Simulation {
 
     fn apply_sources(&mut self) {
         let t = self.current_time();
+        let dt = self.params.dt;
 
-        for source in &mut self.params.sources {
-            if source.should_trigger(t) {
-                source.mark_triggered();
-            }
+        // Collect injection values first (avoids simultaneous mutable/immutable borrow of self)
+        let injections: Vec<(usize, usize, f64)> = self
+            .params
+            .sources
+            .iter()
+            .filter_map(|source| {
+                if !source.triggered {
+                    return None;
+                }
 
-            if !source.triggered {
-                continue;
-            }
+                let tau = t - source.trigger_time.unwrap_or(0.0);
+                let t0 = 1.2 / source.frequency;
 
-            let tau = t - source.trigger_time.unwrap_or(0.0);
+                // Apply while the pulse is within its active window
+                let pulse_duration = t0 + 3.0 / source.frequency;
+                if tau > pulse_duration {
+                    return None;
+                }
 
-            // Only apply for ~3 periods of the dominant frequency
-            let pulse_duration = 3.0 / source.frequency;
-            if tau > pulse_duration {
-                continue; // Stop applying after pulse is complete
-            }
+                // Scale by dt so amplitude is independent of time step size
+                let amplitude = source.ricker_wavelet(t) * source.amplitude * dt;
+                Some((source.x, source.z, amplitude))
+            })
+            .collect();
 
-            let amplitude = source.ricker_wavelet(t);
-            let scaled_amplitude = amplitude * source.amplitude;
-
-            self.wavefield_current.sigma_xx[[source.x, source.z]] += scaled_amplitude;
-            self.wavefield_current.sigma_zz[[source.x, source.z]] += scaled_amplitude;
+        for (sx, sz, amplitude) in injections {
+            self.wavefield_current.sigma_xx[[sx, sz]] += amplitude;
+            self.wavefield_current.sigma_zz[[sx, sz]] += amplitude;
         }
     }
 
@@ -422,25 +426,19 @@ impl Simulation {
     pub fn step(&mut self) {
         let current_time = self.current_time();
 
-        // 1. Apply sources (inject energy) - only for sources that should trigger
-        let should_apply = self.params.sources.iter_mut().any(|source| {
+        // 1. Mark any newly triggered sources, then apply all active sources
+        for source in self.params.sources.iter_mut() {
             if source.should_trigger(current_time) {
                 source.mark_triggered();
-                true
-            } else {
-                false
             }
-        });
-
-        if should_apply {
-            self.apply_sources();
         }
+        self.apply_sources();
 
-        // 2. Update stresses from velocity gradients
-        self.update_stresses_parallel();
-
-        // 3. Update velocities from stress gradients
+        // 2. Update velocities from stress gradients (leapfrog: v first, then σ)
         self.update_velocities_parallel();
+
+        // 3. Update stresses from velocity gradients
+        self.update_stresses_parallel();
 
         // 4. Apply boundary conditions
         self.apply_boundary_conditions();
@@ -452,25 +450,19 @@ impl Simulation {
     pub fn step_serial(&mut self) {
         let current_time = self.current_time();
 
-        // 1. Apply sources (inject energy) - only for sources that should trigger
-        let should_apply = self.params.sources.iter_mut().any(|source| {
+        // 1. Mark any newly triggered sources, then apply all active sources
+        for source in self.params.sources.iter_mut() {
             if source.should_trigger(current_time) {
                 source.mark_triggered();
-                true
-            } else {
-                false
             }
-        });
-
-        if should_apply {
-            self.apply_sources();
         }
+        self.apply_sources();
 
-        // 2. Update stresses from velocity gradients
-        self.update_stresses();
-
-        // 3. Update velocities from stress gradients
+        // 2. Update velocities from stress gradients (leapfrog: v first, then σ)
         self.update_velocities();
+
+        // 3. Update stresses from velocity gradients
+        self.update_stresses();
 
         // 4. Apply boundary conditions
         self.apply_boundary_conditions();
@@ -500,33 +492,48 @@ impl Simulation {
         ke
     }
 
-    /// Compute total elastic potential energy in the domain
-    /// PE = ∫ 0.5 * (σ:ε) dV where : is double dot product
-    /// For 2D: PE ≈ Σ 0.5 * (σxx*exx + σzz*ezz + 2*σxz*exz) * dx * dz
-    /// where exx = ∂vx/∂x, ezz = ∂vz/∂z, exz = 0.5*(∂vx/∂z + ∂vz/∂x)
+    /// Compute total elastic potential energy in the domain.
+    /// Uses the stress-based formula for isotropic elastic media:
+    ///   PE = Σ [ σ_xx² / (2*(λ+2μ)) + σ_zz² / (2*(λ+2μ))
+    ///          - λ*σ_xx*σ_zz / ((λ+2μ)*2μ)... ]
+    ///
+    /// Simplified via the compliance tensor inverse:
+    ///   e_ij = S_ijkl σ_kl  and  PE = 0.5 σ:e = 0.5 σ:S:σ
+    ///
+    /// For 2D plane-strain isotropic:
+    ///   PE = Σ [ (σ_xx² + σ_zz² - 2ν σ_xx σ_zz) / (2ρ vp²) + σ_xz² / (2μ) ] * dV
+    /// where ρvp² = λ+2μ and ν_eff = λ/(λ+2μ).
     pub fn compute_potential_energy(&self) -> f64 {
         let dx = self.grid.dx;
         let dz = self.grid.dz;
         let cell_volume = dx * dz;
         let mut pe = 0.0;
 
-        let (nx, nz) = self.wavefield_current.vx.dim();
-        for i in 1..nx - 1 {
-            for k in 1..nz - 1 {
+        let (nx, nz) = self.wavefield_current.sigma_xx.dim();
+        for i in 0..nx {
+            for k in 0..nz {
                 let sigma_xx = self.wavefield_current.sigma_xx[[i, k]];
                 let sigma_zz = self.wavefield_current.sigma_zz[[i, k]];
                 let sigma_xz = self.wavefield_current.sigma_xz[[i, k]];
 
-                // Compute strain components using finite differences
-                let exx = (self.wavefield_current.vx[[i, k]] - self.wavefield_current.vx[[i - 1, k]]) / dx;
-                let ezz = (self.wavefield_current.vz[[i, k]] - self.wavefield_current.vz[[i, k - 1]]) / dz;
-                let exz = 0.5 * (
-                    (self.wavefield_current.vx[[i, k + 1]] - self.wavefield_current.vx[[i, k - 1]]) / (2.0 * dz)
-                    + (self.wavefield_current.vz[[i + 1, k]] - self.wavefield_current.vz[[i - 1, k]]) / (2.0 * dx)
-                );
+                let lambda = self.materials.lambda[[i, k]];
+                let mu = self.materials.mu[[i, k]];
+                let lambda_2mu = lambda + 2.0 * mu;
 
-                let strain_energy = sigma_xx * exx + sigma_zz * ezz + 2.0 * sigma_xz * exz;
-                pe += 0.5 * strain_energy * cell_volume;
+                // Compliance-based energy density:
+                //   0.5 * (σ_xx² + σ_zz²) / (λ+2μ)
+                //   - λ * σ_xx * σ_zz / (μ * (λ+2μ))
+                //   + σ_xz² / (2μ)
+                // Guard against zero moduli (vacuum / unset cells)
+                let pe_cell = if lambda_2mu > 0.0 && mu > 0.0 {
+                    0.5 * (sigma_xx * sigma_xx + sigma_zz * sigma_zz) / lambda_2mu
+                        - lambda * sigma_xx * sigma_zz / (mu * lambda_2mu)
+                        + 0.5 * sigma_xz * sigma_xz / mu
+                } else {
+                    0.0
+                };
+
+                pe += pe_cell * cell_volume;
             }
         }
         pe

@@ -3,12 +3,15 @@
 2D Visualization of Critical Cellular Automaton
 """
 
+import subprocess
 import sys
 from pathlib import Path
 
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.animation import FFMpegWriter, FuncAnimation
+
+matplotlib.use("Agg")
 
 
 def parse_output_file(filename, grid_size=(20, 20)):
@@ -38,7 +41,6 @@ def parse_output_file(filename, grid_size=(20, 20)):
                 grid_states[0, :, :] = 0
             elif line.startswith("#D"):
                 current_frame += 1
-                # Copy previous state
                 grid_states[current_frame] = grid_states[current_frame - 1]
                 try:
                     iteration = int(line[2:])
@@ -50,7 +52,7 @@ def parse_output_file(filename, grid_size=(20, 20)):
             else:
                 try:
                     i, j, value = map(int, line.split(",")[:3])
-                    i, j = i - 1, j - 1  # Convert to 0-indexed
+                    i, j = i - 1, j - 1
 
                     if 0 <= i < nx and 0 <= j < ny:
                         grid_states[current_frame, i, j] = value
@@ -63,57 +65,79 @@ def parse_output_file(filename, grid_size=(20, 20)):
 def create_visualization(
     grid_states, output_file="animation.mp4", fps=30, grid_size=(40, 40)
 ):
-    """Create optimized animation with proper blitting."""
-    fig, ax = plt.subplots(figsize=(8, 8))
+    """Render frames directly to ffmpeg pipe — bypasses FuncAnimation overhead."""
+    dpi = 100
+    fig_w, fig_h = 8, 8
+    px_w, px_h = int(fig_w * dpi), int(fig_h * dpi)
 
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
     max_value = np.max(grid_states)
 
-    # Initial setup
     im = ax.imshow(
         grid_states[0],
         cmap="Greys",
         vmin=0,
         vmax=max_value,
         origin="lower",
-        interpolation="nearest",  # Faster rendering
+        interpolation="nearest",
     )
-    cbar = plt.colorbar(im, ax=ax, label="Grain Count")
-
+    plt.colorbar(im, ax=ax, label="Grain Count")
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
     title = ax.set_title("", fontsize=12, fontweight="bold")
 
-    # Pre-calculate total grains for all frames
     total_grains = grid_states.sum(axis=(1, 2))
 
-    def update(frame):
-        """Update function with minimal operations."""
-        im.set_array(grid_states[frame])
-        title.set_text(f"Iteration {frame + 1} | Total Grains: {total_grains[frame]}")
-        return im, title
+    # Draw static elements once so they're in the buffer
+    fig.canvas.draw()
+
+    ffmpeg_cmd = [
+        "ffmpeg", "-y",
+        "-f", "rawvideo",
+        "-vcodec", "rawvideo",
+        "-s", f"{px_w}x{px_h}",
+        "-pix_fmt", "rgba",
+        "-r", str(fps),
+        "-i", "pipe:0",
+        "-vcodec", "libx264",
+        "-preset", "ultrafast",
+        "-pix_fmt", "yuv420p",
+        "-b:v", "2000k",
+        output_file,
+    ]
 
     print(f"Creating animation with {len(grid_states)} frames...")
-    anim = FuncAnimation(
-        fig,
-        update,
-        frames=len(grid_states),
-        interval=1000 // fps,
-        blit=True,  # Now properly returns artists
-        repeat=True,
-    )
-
     print(f"Saving animation to '{output_file}'...")
-    writer = FFMpegWriter(fps=fps, bitrate=2000, extra_args=["-preset", "ultrafast"])
 
     try:
-        anim.save(output_file, writer=writer, dpi=100)
-        print(f"✓ Animation saved successfully to '{output_file}'")
-    except Exception as e:
-        print(f"Error saving animation: {e}")
-        print("Make sure you have ffmpeg installed")
+        proc = subprocess.Popen(
+            ffmpeg_cmd, stdin=subprocess.PIPE, stderr=subprocess.DEVNULL
+        )
+    except FileNotFoundError:
+        print("Error: ffmpeg not found. Install with: brew install ffmpeg")
+        sys.exit(1)
+
+    try:
+        for frame in range(len(grid_states)):
+            im.set_array(grid_states[frame])
+            title.set_text(
+                f"Iteration {frame + 1} | Total Grains: {total_grains[frame]}"
+            )
+            fig.canvas.draw()
+            proc.stdin.write(fig.canvas.buffer_rgba().tobytes())
+
+            if (frame + 1) % 500 == 0:
+                print(f"  {frame + 1}/{len(grid_states)} frames written")
+
+        proc.stdin.close()
+        proc.wait()
+    except BrokenPipeError:
+        print("Error: ffmpeg pipe broke unexpectedly")
+        proc.kill()
         sys.exit(1)
 
     plt.close(fig)
+    print(f"✓ Animation saved successfully to '{output_file}'")
 
 
 def main():

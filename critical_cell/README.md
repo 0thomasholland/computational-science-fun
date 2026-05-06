@@ -24,8 +24,7 @@ Requires a Fortran compiler (`gfortran`) and `make`.
 
 ```bash
 cd 2d/   # or 3d/ or multithreading/
-make rebuild
-make run
+make pipeline
 ```
 
 The multithreading variant requires OpenMP support (`gfortran -fopenmp`).
@@ -35,7 +34,13 @@ The multithreading variant requires OpenMP support (`gfortran -fopenmp`).
 Output is written to `output.csv` as a sequence of grid states. A Python script renders a video:
 
 ```bash
-python3 visualise.py --output animation.mp4 --fps 15 --gridsize X Y [Z] --input output.csv
+uv run visualise.py --output animation.mp4 --fps 15 --gridsize X Y [Z] --input output.csv
+```
+
+or 
+
+```bash
+python visualise.py --output animation.mp4 --fps 15 --gridsize X Y [Z] --input output.csv
 ```
 
 Requires `numpy`, `matplotlib`, and `ffmpeg`.

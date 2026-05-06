@@ -19,6 +19,7 @@ def parse_output_file(filename, grid_size=(20, 20, 20)):
     current_grid = np.zeros((nx, ny, nz), dtype=int)
     sorted_iterations = []
 
+    pending_iteration = None
     try:
         with open(filename, "r") as f:
             for line in f:
@@ -29,16 +30,18 @@ def parse_output_file(filename, grid_size=(20, 20, 20)):
                 if line.startswith("#INIT"):
                     # Start of initial state
                     current_grid = np.zeros((nx, ny, nz), dtype=int)
+                    pending_iteration = None
                 elif line.startswith("#D"):
-                    # Start of diff section - save current grid and start new iteration
-                    grid_states.append(current_grid.copy())
+                    # Flush any pending diff: append state after the previous diff was applied
+                    if pending_iteration is not None:
+                        grid_states.append(current_grid.copy())
+                        sorted_iterations.append(pending_iteration)
                     try:
-                        iteration = int(line[2:])
-                        sorted_iterations.append(iteration)
+                        pending_iteration = int(line[2:])
                     except ValueError:
-                        pass
+                        pending_iteration = None
                 else:
-                    # Parse data: i,j,k,value
+                    # Parse data: i,j,k,value — apply to current_grid
                     try:
                         parts = line.split(",")
                         if len(parts) >= 4:
@@ -52,9 +55,10 @@ def parse_output_file(filename, grid_size=(20, 20, 20)):
                     except (ValueError, IndexError):
                         continue
 
-            # Add the final grid state
-            if len(grid_states) == 0 or not np.array_equal(grid_states[-1], current_grid):
+            # Flush last pending diff after all diff data has been applied
+            if pending_iteration is not None:
                 grid_states.append(current_grid.copy())
+                sorted_iterations.append(pending_iteration)
 
     except FileNotFoundError:
         print(f"Error: File '{filename}' not found.")
@@ -70,8 +74,8 @@ def create_visualization(
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111, projection="3d")
 
-    all_values = np.concatenate([grid.flatten() for grid in grid_states])
-    vmin, vmax = all_values.min(), all_values.max()
+    vmin = min(int(g.min()) for g in grid_states)
+    vmax = max(int(g.max()) for g in grid_states)
 
     def update(frame):
         """Update function for animation."""

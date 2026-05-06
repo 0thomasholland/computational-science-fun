@@ -11,7 +11,10 @@ PYTHON = python3
 VIS_SCRIPT = visualise.py
 VIS_OUTPUT = animation.mp4
 VIS_FPS = 15
-VIS_GRID_SIZE ?= 20 20
+VIS_GRID_SIZE ?= 40 40
+
+debug: FFLAGS += -g -fcheck=bounds
+debug: $(EXECUTABLE)
 
 all: $(EXECUTABLE)
 
@@ -36,8 +39,10 @@ run: $(EXECUTABLE)
 
 visualise:
 	@echo "Generating visualization..."
-	@$(TIME) $(PYTHON) $(VIS_SCRIPT) --output $(VIS_OUTPUT) --fps $(VIS_FPS) --grid-size $(VIS_GRID_SIZE)
+	@$(TIME) uv run $(VIS_SCRIPT) --output $(VIS_OUTPUT) --fps $(VIS_FPS) --grid-size $(VIS_GRID_SIZE)
 
 rebuild: clean all
 
-.PHONY: all clean run rebuild visualise
+pipeline: clean run visualise clean
+
+.PHONY: all debug clean run rebuild visualise pipeline

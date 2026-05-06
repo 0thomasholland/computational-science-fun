@@ -90,17 +90,18 @@ impl SimulationConfig {
         Ok(())
     }
 
-    /// Compute dt from CFL condition if not specified
+    /// Compute dt from CFL condition if not specified.
+    /// Uses the 2D CFL condition: dt = cfl_safety * min(dx, dz) / (vp_max * √2)
     pub fn compute_dt_if_needed(&mut self, dx: f64, dz: f64, vp_max: f64) {
         if self.dt.is_none() {
             let min_spacing = dx.min(dz);
-            self.dt = Some(self.cfl_safety * min_spacing / vp_max);
+            self.dt = Some(self.cfl_safety * min_spacing / (vp_max * 2.0_f64.sqrt()));
         }
     }
 
     /// Calculate number of timesteps given dt
     pub fn compute_nt(&self, dt: f64) -> usize {
-        (self.total_time / dt).round() as usize
+        (self.total_time / dt).ceil() as usize
     }
 }
 

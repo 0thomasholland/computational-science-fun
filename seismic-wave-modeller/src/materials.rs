@@ -119,11 +119,13 @@ impl MaterialProperties {
                     let m2 = mu[[i + 1, k]];
                     let m3 = mu[[i, k + 1]];
                     let m4 = mu[[i + 1, k + 1]];
-                    // Harmonic mean of 4 values
-                    // harmonic mean is associative so we can do pairwise
-                    let hm12 = Self::harmonic_mean(m1, m2);
-                    let hm34 = Self::harmonic_mean(m3, m4);
-                    result[[i, k]] = Self::harmonic_mean(hm12, hm34);
+                    // True 4-point harmonic mean: 4 / (1/m1 + 1/m2 + 1/m3 + 1/m4)
+                    // Pairwise H(H(a,b), H(c,d)) ≠ H(a,b,c,d), so compute directly.
+                    result[[i, k]] = if m1 == 0.0 || m2 == 0.0 || m3 == 0.0 || m4 == 0.0 {
+                        0.0
+                    } else {
+                        4.0 / (1.0 / m1 + 1.0 / m2 + 1.0 / m3 + 1.0 / m4)
+                    };
                 } else {
                     // Boundary case: just take the value at (i,k)
                     result[[i, k]] = mu[[i, k]];

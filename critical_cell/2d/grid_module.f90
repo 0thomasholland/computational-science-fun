@@ -32,7 +32,16 @@ contains
             grid%cells = 0
 
         case('random')
-            call random_seed()
+            block
+                integer :: seed_n, seed_clock
+                integer, allocatable :: seed_arr(:)
+                call random_seed(size=seed_n)
+                allocate(seed_arr(seed_n))
+                call system_clock(seed_clock)
+                seed_arr = seed_clock + 37 * [(i, i=1,seed_n)]
+                call random_seed(put=seed_arr)
+                deallocate(seed_arr)
+            end block
             do i = 1, nx
                 do j = 1, ny
                     call random_number(rand_val)
@@ -55,26 +64,33 @@ contains
         integer, intent(in) :: unit
         integer :: i, j
         logical :: redistributed
+        integer, allocatable :: delta(:,:)
 
         grid%iteration = grid%iteration + 1
 
+        allocate(delta(grid%nx, grid%ny))
+
         do while (.true.)
             redistributed = .false.
+            delta = 0
             do i = 1, grid%nx
                 do j = 1, grid%ny
                     if (grid%cells(i,j) >= 4) then
-                        grid%cells(i,j) = grid%cells(i,j) - 4
-                        if (i > 1) grid%cells(i-1,j) = grid%cells(i-1,j) + 1
-                        if (i < grid%nx) grid%cells(i+1,j) = grid%cells(i+1,j) + 1
-                        if (j > 1) grid%cells(i,j-1) = grid%cells(i,j-1) + 1
-                        if (j < grid%ny) grid%cells(i,j+1) = grid%cells(i,j+1) + 1
+                        delta(i,j) = delta(i,j) - 4
+                        if (i > 1) delta(i-1,j) = delta(i-1,j) + 1
+                        if (i < grid%nx) delta(i+1,j) = delta(i+1,j) + 1
+                        if (j > 1) delta(i,j-1) = delta(i,j-1) + 1
+                        if (j < grid%ny) delta(i,j+1) = delta(i,j+1) + 1
                         redistributed = .true.
                     end if
                 end do
             end do
+            grid%cells = grid%cells + delta
             call write_grid_diff(grid, unit)
             if (.not. redistributed) exit
         end do
+
+        deallocate(delta)
 
     end subroutine redistribute_cells
 

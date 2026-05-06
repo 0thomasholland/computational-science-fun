@@ -1,4 +1,5 @@
 FC = gfortran
+# NOTE: reduction(.or.:var) requires OpenMP 4.5+ (gfortran 6+)
 FFLAGS = -Wall -Wextra -O2 -pedantic -fopenmp
 THREADS ?= 1
 
@@ -7,6 +8,9 @@ EXECUTABLE = critical_cell
 
 # Use /usr/bin/time for more detailed output, or just 'time' for the shell default
 TIME = /usr/bin/time -p
+
+debug: FFLAGS += -g -fcheck=bounds
+debug: $(EXECUTABLE)
 
 all: $(EXECUTABLE)
 
@@ -31,4 +35,6 @@ run: $(EXECUTABLE)
 
 rebuild: clean all
 
-.PHONY: all clean run rebuild
+pipeline: clean run visualise clean
+
+.PHONY: all debug clean run rebuild visualise pipeline
