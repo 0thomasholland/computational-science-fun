@@ -7,6 +7,11 @@ Two solvers are included:
 - **SDE integrator** — Itô trajectory simulation with transition detection
 - **Fokker-Planck solver** — evolves the probability density ρ(x,y,t) forward in time on a grid
 
+<p align="center">
+  <img src="https://media.githubusercontent.com/media/0thomasholland/computational-science-fun/refs/heads/main/sde-attractor/runs/run_013/figure.png" width="49%">
+  <img src="https://github.com/0thomasholland/computational-science-fun/blob/main/sde-attractor/density.gif?raw=true" width="49%">
+</p>
+
 ---
 
 ## Maths
